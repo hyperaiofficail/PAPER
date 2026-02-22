@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Optional, List
+import time
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -39,6 +40,16 @@ def find_tool(tool_name: str):
             return tool
     return None
 
+class ToolResponse(BaseModel):
+    tool_name: str
+    status: str
+    input_received: str
+    output_type: str
+    output_data: Optional[Any] = None
+    message: str
+    processing_time_ms: int
+    settings_used: Optional[Dict[str, Any]] = None
+
 @app.get("/tools")
 def get_tools(category: Optional[str] = None):
     if category:
@@ -52,47 +63,82 @@ def get_tool(tool_name: str):
         raise HTTPException(status_code=404, detail="Tool not found")
     return tool
 
-@app.post("/process/{tool_name}")
+@app.post("/process/{tool_name}", response_model=ToolResponse)
 async def process_tool(
     tool_name: str,
     file: Optional[UploadFile] = File(None),
-    text_input: Optional[str] = Form(None)
+    text_input: Optional[str] = Form(None),
+    settings: Optional[str] = Form(None) # JSON string of settings
 ):
+    start_time = time.time()
+
     tool = find_tool(tool_name)
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
 
-    # Placeholder logic
-    result = {
-        "tool": tool_name,
+    parsed_settings = {}
+    if settings:
+        try:
+            parsed_settings = json.loads(settings)
+        except:
+            pass
+
+    # Simulate processing time
+    time.sleep(0.5)
+
+    response = {
+        "tool_name": tool_name,
         "status": "success",
-        "message": f"Successfully processed input for {tool_name}",
-        "output_type": tool.get("output_type", "Unknown")
+        "input_received": "",
+        "output_type": tool.get("output_type", "Unknown"),
+        "output_data": None,
+        "message": "",
+        "processing_time_ms": 0,
+        "settings_used": parsed_settings if parsed_settings else None
     }
 
-    if file:
-        result["input_type"] = "file"
-        result["filename"] = file.filename
-        # Simulate processing file
-        result["download_url"] = f"/download/processed_{file.filename}"
-    elif text_input:
-        result["input_type"] = "text"
-        result["text_length"] = len(text_input)
+    try:
+        if file:
+            response["input_received"] = f"File: {file.filename} ({file.content_type})"
+            # In a real app, we would process the file here
+            # For now, return a dummy download URL or base64
+            response["output_data"] = f"https://hyper-tools.com/output/processed_{file.filename}"
+            response["message"] = f"Successfully processed {file.filename}"
 
-        # Simple dummy logic for demonstration
-        if "Case" in tool_name:
-            result["output"] = text_input.upper()
-        elif "Reverse" in tool_name:
-             result["output"] = text_input[::-1]
-        elif "Count" in tool_name:
-             result["output"] = f"Word count: {len(text_input.split())}"
+        elif text_input:
+            response["input_received"] = f"Text input (length: {len(text_input)})"
+
+            # Simple dummy logic for demonstration
+            if "Case" in tool_name:
+                response["output_data"] = text_input.upper()
+                response["message"] = "Text converted to uppercase"
+            elif "Reverse" in tool_name:
+                 response["output_data"] = text_input[::-1]
+                 response["message"] = "Text reversed"
+            elif "Count" in tool_name:
+                 response["output_data"] = f"Word count: {len(text_input.split())}"
+                 response["message"] = "Words counted"
+            elif "QR" in tool_name:
+                 response["output_type"] = "QR Code"
+                 response["output_data"] = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" # 1x1 pixel dummy QR
+                 response["message"] = "QR Code generated"
+            else:
+                 response["output_data"] = f"Processed: {text_input}"
+                 response["message"] = "Input processed successfully"
+
         else:
-             result["output"] = f"Processed: {text_input}"
+            response["status"] = "error"
+            response["message"] = "No input provided"
+            response["input_received"] = "None"
 
-    else:
-        result["message"] = "No input provided"
+    except Exception as e:
+        response["status"] = "error"
+        response["message"] = str(e)
 
-    return result
+    end_time = time.time()
+    response["processing_time_ms"] = int((end_time - start_time) * 1000)
+
+    return response
 
 if __name__ == "__main__":
     import uvicorn
