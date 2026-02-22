@@ -1,1 +1,2 @@
 kagazpdf.io
+for all
