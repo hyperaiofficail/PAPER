@@ -1,2 +1,0 @@
-kagazpdf.io
-for all
