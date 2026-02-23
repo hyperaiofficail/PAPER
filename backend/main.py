@@ -19,6 +19,9 @@ app.add_middleware(
 # Load tools
 TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
+# Security configuration
+MAX_TEXT_INPUT_LENGTH = 10000
+
 try:
     with open(TOOLS_FILE, "r") as f:
         TOOLS = json.load(f)
@@ -79,6 +82,12 @@ async def process_tool(
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
     elif text_input:
+        if len(text_input) > MAX_TEXT_INPUT_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Text input too long. Max length is {MAX_TEXT_INPUT_LENGTH} characters."
+            )
+
         result["input_type"] = "text"
         result["text_length"] = len(text_input)
 
