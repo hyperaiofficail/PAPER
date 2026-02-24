@@ -21,6 +21,7 @@ TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
 # Security configuration
 MAX_TEXT_INPUT_LENGTH = 10000
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 try:
     with open(TOOLS_FILE, "r") as f:
@@ -74,6 +75,17 @@ async def process_tool(
     }
 
     if file:
+        # Check file size
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Max size is {MAX_FILE_SIZE // (1024 * 1024)}MB."
+            )
+
         result["input_type"] = "file"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
