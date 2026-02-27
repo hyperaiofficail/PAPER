@@ -1,8 +1,9 @@
 import json
 import os
 from typing import Optional, List
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -21,6 +22,18 @@ TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
 # Security configuration
 MAX_TEXT_INPUT_LENGTH = 10000
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
+
+@app.middleware("http")
+async def check_content_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "File too large"}
+        )
+    response = await call_next(request)
+    return response
 
 try:
     with open(TOOLS_FILE, "r") as f:
