@@ -8,9 +8,12 @@ from pydantic import BaseModel
 app = FastAPI()
 
 # Enable CORS
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
+allowed_origins = allowed_origins_env.split(",") if allowed_origins_env else ["http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -21,6 +24,7 @@ TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
 # Security configuration
 MAX_TEXT_INPUT_LENGTH = 10000
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB limit
 
 try:
     with open(TOOLS_FILE, "r") as f:
@@ -74,6 +78,16 @@ async def process_tool(
     }
 
     if file:
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Max size is {MAX_FILE_SIZE} bytes."
+            )
+
         result["input_type"] = "file"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
