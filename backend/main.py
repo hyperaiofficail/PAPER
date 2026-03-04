@@ -1,16 +1,21 @@
 import json
 import os
-from typing import Optional, List
+from typing import Optional
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 app = FastAPI()
 
 # Enable CORS
+# Get allowed origins from env, fallback to localhost:3000 for local dev
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
+allowed_origins = (
+    allowed_origins_env.split(",") if allowed_origins_env else ["http://localhost:3000"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,11 +33,12 @@ try:
 except FileNotFoundError:
     # Fallback if running from a different directory context or file moved
     if os.path.exists("tools.json"):
-         with open("tools.json", "r") as f:
+        with open("tools.json", "r") as f:
             TOOLS = json.load(f)
     else:
         TOOLS = []
         print("Warning: tools.json not found")
+
 
 # Helper to find tool
 def find_tool(tool_name: str):
@@ -42,11 +48,13 @@ def find_tool(tool_name: str):
             return tool
     return None
 
+
 @app.get("/tools")
 def get_tools(category: Optional[str] = None):
     if category:
         return [t for t in TOOLS if t["category"] == category]
     return TOOLS
+
 
 @app.get("/tool/{tool_name}")
 def get_tool(tool_name: str):
@@ -55,11 +63,12 @@ def get_tool(tool_name: str):
         raise HTTPException(status_code=404, detail="Tool not found")
     return tool
 
+
 @app.post("/process/{tool_name}")
 async def process_tool(
     tool_name: str,
     file: Optional[UploadFile] = File(None),
-    text_input: Optional[str] = Form(None)
+    text_input: Optional[str] = Form(None),
 ):
     tool = find_tool(tool_name)
     if not tool:
@@ -70,7 +79,7 @@ async def process_tool(
         "tool": tool_name,
         "status": "success",
         "message": f"Successfully processed input for {tool_name}",
-        "output_type": tool.get("output_type", "Unknown")
+        "output_type": tool.get("output_type", "Unknown"),
     }
 
     if file:
@@ -85,7 +94,7 @@ async def process_tool(
         if len(text_input) > MAX_TEXT_INPUT_LENGTH:
             raise HTTPException(
                 status_code=400,
-                detail=f"Text input too long. Max length is {MAX_TEXT_INPUT_LENGTH} characters."
+                detail=f"Text input too long. Max length is {MAX_TEXT_INPUT_LENGTH} characters.",
             )
 
         result["input_type"] = "text"
@@ -95,17 +104,19 @@ async def process_tool(
         if "Case" in tool_name:
             result["output"] = text_input.upper()
         elif "Reverse" in tool_name:
-             result["output"] = text_input[::-1]
+            result["output"] = text_input[::-1]
         elif "Count" in tool_name:
-             result["output"] = f"Word count: {len(text_input.split())}"
+            result["output"] = f"Word count: {len(text_input.split())}"
         else:
-             result["output"] = f"Processed: {text_input}"
+            result["output"] = f"Processed: {text_input}"
 
     else:
         result["message"] = "No input provided"
 
     return result
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
