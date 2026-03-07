@@ -8,9 +8,11 @@ from pydantic import BaseModel
 app = FastAPI()
 
 # Enable CORS
+# Security Improvement: Use environment variable for allowed origins to prevent unauthorized cross-origin requests
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
