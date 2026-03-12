@@ -1,10 +1,31 @@
 import json
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Security configuration
+MAX_TEXT_INPUT_LENGTH = 10000
+MAX_PAYLOAD_SIZE = 10 * 1024 * 1024  # 10MB limit to prevent DoS via resource exhaustion
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    """
+    Middleware to limit the size of incoming request payloads.
+    This prevents DoS attacks by rejecting large requests early,
+    before FastAPI spools them into memory or disk.
+    """
+    if request.method in ["POST", "PUT", "PATCH"]:
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_PAYLOAD_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Payload too large. Max size is 10MB."},
+            )
+    return await call_next(request)
 
 # Enable CORS
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
@@ -23,9 +44,6 @@ app.add_middleware(
 
 # Load tools
 TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
-
-# Security configuration
-MAX_TEXT_INPUT_LENGTH = 10000
 
 try:
     with open(TOOLS_FILE, "r") as f:
