@@ -1,7 +1,9 @@
 import json
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -26,6 +28,39 @@ TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
 # Security configuration
 MAX_TEXT_INPUT_LENGTH = 10000
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+class LimitUploadSizeMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ["POST", "PUT", "PATCH"]:
+            transfer_encoding = request.headers.get("transfer-encoding", "").lower()
+            if "chunked" in transfer_encoding:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "detail": "Chunked encoding is not allowed for uploads to prevent DoS attacks."
+                    },
+                )
+            content_length = request.headers.get("content-length")
+            if content_length:
+                try:
+                    if int(content_length) > MAX_UPLOAD_SIZE:
+                        return JSONResponse(
+                            status_code=413,
+                            content={
+                                "detail": f"Payload Too Large. Maximum upload size is {MAX_UPLOAD_SIZE} bytes."
+                            },
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Invalid Content-Length header."},
+                    )
+        return await call_next(request)
+
+
+app.add_middleware(LimitUploadSizeMiddleware)
 
 try:
     with open(TOOLS_FILE, "r") as f:
