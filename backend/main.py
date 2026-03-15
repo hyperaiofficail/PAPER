@@ -3,8 +3,70 @@ import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.responses import JSONResponse
 
 app = FastAPI()
+
+# Security configuration
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB limit
+
+
+class ContentLengthLimitMiddleware:
+    """
+    Middleware to limit the maximum size of incoming requests to prevent DoS attacks
+    via resource exhaustion. This intercepts requests early before parsing.
+    """
+
+    def __init__(self, app: ASGIApp, max_upload_size: int = MAX_UPLOAD_SIZE):
+        self.app = app
+        self.max_upload_size = max_upload_size
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Only check POST, PUT, PATCH where payloads are expected
+        if scope["method"] in ["POST", "PUT", "PATCH"]:
+            headers = dict(scope.get("headers", []))
+
+            # Reject chunked transfer encoding as it bypasses content-length checks
+            if (
+                b"transfer-encoding" in headers
+                and b"chunked" in headers[b"transfer-encoding"]
+            ):
+                response = JSONResponse(
+                    {"detail": "Chunked transfer encoding is not allowed."},
+                    status_code=411,
+                )
+                await response(scope, receive, send)
+                return
+
+            if b"content-length" in headers:
+                try:
+                    content_length = int(headers[b"content-length"])
+                    if content_length > self.max_upload_size:
+                        response = JSONResponse(
+                            {
+                                "detail": f"Request body too large. Maximum size is {self.max_upload_size} bytes."
+                            },
+                            status_code=413,
+                        )
+                        await response(scope, receive, send)
+                        return
+                except ValueError:
+                    response = JSONResponse(
+                        {"detail": "Invalid Content-Length header."},
+                        status_code=400,
+                    )
+                    await response(scope, receive, send)
+                    return
+
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(ContentLengthLimitMiddleware)
 
 # Enable CORS
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
