@@ -1,10 +1,53 @@
 import json
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 app = FastAPI()
+
+
+class ContentLengthLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Security Middleware: Limits upload size to prevent DoS via resource exhaustion.
+    Must check headers directly since FastAPI/Starlette spools large uploads to disk
+    before endpoint logic is reached.
+    """
+
+    def __init__(self, app, max_upload_size: int):
+        super().__init__(app)
+        self.max_upload_size = max_upload_size
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ["POST", "PUT", "PATCH"]:
+            if request.headers.get("transfer-encoding", "").lower() == "chunked":
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Chunked transfer encoding is not allowed"},
+                )
+            content_length = request.headers.get("content-length")
+            if content_length is not None:
+                try:
+                    length = int(content_length)
+                    if length > self.max_upload_size:
+                        return JSONResponse(
+                            status_code=413,
+                            content={
+                                "detail": f"Request body too large. Maximum size is {self.max_upload_size} bytes."
+                            },
+                        )
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "Invalid Content-Length header"},
+                    )
+        return await call_next(request)
+
+
+# Apply limits before CORS
+app.add_middleware(ContentLengthLimitMiddleware, max_upload_size=10 * 1024 * 1024)
 
 # Enable CORS
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
