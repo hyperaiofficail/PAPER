@@ -1,10 +1,41 @@
 import json
 import os
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
+
+# Security configuration
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+@app.middleware("http")
+async def content_length_limit_middleware(request: Request, call_next):
+    if request.method in ["POST", "PUT", "PATCH"]:
+        if request.headers.get("Transfer-Encoding") == "chunked":
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Chunked transfer encoding is not allowed"},
+            )
+
+        content_length = request.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_FILE_SIZE:
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "detail": f"Payload too large. Maximum size is {MAX_FILE_SIZE} bytes."
+                        },
+                    )
+            except ValueError:
+                return JSONResponse(
+                    status_code=400, content={"detail": "Invalid Content-Length header"}
+                )
+    return await call_next(request)
+
 
 # Enable CORS
 allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
