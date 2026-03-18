@@ -6,6 +6,7 @@ import importlib
 class MockJSONResponse:
     def __init__(self, status_code, content):
         self.status_code = status_code
+        self.headers = {}
         import json
         self.body = json.dumps(content).encode()
 
@@ -46,20 +47,26 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         request = MagicMock()
         request.method = "GET"
         request.headers = {"Content-Length": str(MAX_FILE_SIZE + 1)}
-        call_next = AsyncMock(return_value="OK")
+        mock_response = MagicMock()
+        mock_response.headers = {}
+        call_next = AsyncMock(return_value=mock_response)
 
         response = await content_length_limit_middleware(request, call_next)
-        self.assertEqual(response, "OK")
+        self.assertEqual(response, mock_response)
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
         call_next.assert_called_once_with(request)
 
     async def test_post_request_allowed_size(self):
         request = MagicMock()
         request.method = "POST"
         request.headers = {"Content-Length": str(MAX_FILE_SIZE)}
-        call_next = AsyncMock(return_value="OK")
+        mock_response = MagicMock()
+        mock_response.headers = {}
+        call_next = AsyncMock(return_value=mock_response)
 
         response = await content_length_limit_middleware(request, call_next)
-        self.assertEqual(response, "OK")
+        self.assertEqual(response, mock_response)
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
         call_next.assert_called_once_with(request)
 
     async def test_post_request_too_large(self):
@@ -85,6 +92,20 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 411)
         self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
         call_next.assert_not_called()
+
+    async def test_security_headers_added(self):
+        request = MagicMock()
+        request.method = "GET"
+        request.headers = {}
+        mock_response = MagicMock()
+        mock_response.headers = {}
+        call_next = AsyncMock(return_value=mock_response)
+
+        response = await content_length_limit_middleware(request, call_next)
+
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(response.headers["Strict-Transport-Security"], "max-age=31536000; includeSubDomains")
 
     async def test_post_request_invalid_content_length(self):
         request = MagicMock()
