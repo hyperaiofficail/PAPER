@@ -14,7 +14,8 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 @app.middleware("http")
 async def content_length_limit_middleware(request: Request, call_next):
     if request.method in ["POST", "PUT", "PATCH"]:
-        if request.headers.get("Transfer-Encoding") == "chunked":
+        te = request.headers.get("Transfer-Encoding")
+        if te and "chunked" in te.lower():
             return JSONResponse(
                 status_code=411,
                 content={"detail": "Chunked transfer encoding is not allowed"},
