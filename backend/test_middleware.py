@@ -1,45 +1,54 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 import sys
-import importlib
+
 
 class MockJSONResponse:
     def __init__(self, status_code, content):
         self.status_code = status_code
         import json
+
         self.body = json.dumps(content).encode()
+
 
 # Mocking FastAPI to avoid actual import errors in restricted environments if any
 # We need `app.middleware` to return the original function so it is not replaced by a MagicMock
 def identity_decorator_factory(*args, **kwargs):
     def decorator(func):
         return func
+
     return decorator
+
 
 class MockFastAPI:
     def __init__(self, *args, **kwargs):
         pass
+
     def middleware(self, *args, **kwargs):
         return identity_decorator_factory(*args, **kwargs)
+
     def get(self, *args, **kwargs):
         return identity_decorator_factory(*args, **kwargs)
+
     def post(self, *args, **kwargs):
         return identity_decorator_factory(*args, **kwargs)
+
     def add_middleware(self, *args, **kwargs):
         pass
+
 
 mock_fastapi = MagicMock()
 mock_fastapi.FastAPI = MockFastAPI
 mock_responses = MagicMock()
 mock_responses.JSONResponse = MockJSONResponse
-sys.modules['fastapi'] = mock_fastapi
-sys.modules['fastapi.middleware'] = MagicMock()
-sys.modules['fastapi.middleware.cors'] = MagicMock()
-sys.modules['fastapi.responses'] = mock_responses
+sys.modules["fastapi"] = mock_fastapi
+sys.modules["fastapi.middleware"] = MagicMock()
+sys.modules["fastapi.middleware.cors"] = MagicMock()
+sys.modules["fastapi.responses"] = mock_responses
 
 # Now import main, and `content_length_limit_middleware` will be the actual function.
-import main
-from main import content_length_limit_middleware, MAX_FILE_SIZE
+from main import content_length_limit_middleware, MAX_FILE_SIZE  # noqa: E402
+
 
 class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
     async def test_get_request_allowed(self):
@@ -83,7 +92,23 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         response = await content_length_limit_middleware(request, call_next)
         self.assertIsInstance(response, MockJSONResponse)
         self.assertEqual(response.status_code, 411)
-        self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
+        self.assertIn(
+            "Chunked transfer encoding is not allowed", response.body.decode()
+        )
+        call_next.assert_not_called()
+
+    async def test_post_request_chunked_bypass(self):
+        request = MagicMock()
+        request.method = "POST"
+        request.headers = {"Transfer-Encoding": "gzip, Chunked"}
+        call_next = AsyncMock()
+
+        response = await content_length_limit_middleware(request, call_next)
+        self.assertIsInstance(response, MockJSONResponse)
+        self.assertEqual(response.status_code, 411)
+        self.assertIn(
+            "Chunked transfer encoding is not allowed", response.body.decode()
+        )
         call_next.assert_not_called()
 
     async def test_post_request_invalid_content_length(self):
@@ -98,5 +123,6 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Invalid Content-Length header", response.body.decode())
         call_next.assert_not_called()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
