@@ -86,6 +86,19 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
         call_next.assert_not_called()
 
+    async def test_post_request_chunked_bypass(self):
+        request = MagicMock()
+        request.method = "POST"
+        # Test case-insensitivity and substring presence
+        request.headers = {"Transfer-Encoding": "gzip, Chunked"}
+        call_next = AsyncMock()
+
+        response = await content_length_limit_middleware(request, call_next)
+        self.assertIsInstance(response, MockJSONResponse)
+        self.assertEqual(response.status_code, 411)
+        self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
+        call_next.assert_not_called()
+
     async def test_post_request_invalid_content_length(self):
         request = MagicMock()
         request.method = "POST"
