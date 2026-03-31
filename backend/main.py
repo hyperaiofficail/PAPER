@@ -57,6 +57,18 @@ TOOLS_FILE = os.path.join(os.path.dirname(__file__), "..", "tools.json")
 
 # Security configuration
 MAX_TEXT_INPUT_LENGTH = 10000
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+@app.middleware("http")
+async def enforce_content_length(request: Request, call_next):
+    if request.method in ["POST", "PUT", "PATCH"] and "content-length" in request.headers:
+        content_length = int(request.headers.get("content-length"))
+        if content_length > MAX_FILE_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": f"Payload too large. Max size is {MAX_FILE_SIZE} bytes."}
+            )
+    return await call_next(request)
 
 try:
     with open(TOOLS_FILE, "r") as f:
