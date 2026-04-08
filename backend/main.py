@@ -34,6 +34,10 @@ async def content_length_limit_middleware(request: Request, call_next):
                 return JSONResponse(
                     status_code=400, content={"detail": "Invalid Content-Length header"}
                 )
+        else:
+            return JSONResponse(
+                status_code=411, content={"detail": "Content-Length header is required"}
+            )
     return await call_next(request)
 
 
