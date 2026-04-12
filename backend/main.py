@@ -21,19 +21,24 @@ async def content_length_limit_middleware(request: Request, call_next):
             )
 
         content_length = request.headers.get("Content-Length")
-        if content_length:
-            try:
-                if int(content_length) > MAX_FILE_SIZE:
-                    return JSONResponse(
-                        status_code=413,
-                        content={
-                            "detail": f"Payload too large. Maximum size is {MAX_FILE_SIZE} bytes."
-                        },
-                    )
-            except ValueError:
+        if not content_length:
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Content-Length header is required"},
+            )
+
+        try:
+            if int(content_length) > MAX_FILE_SIZE:
                 return JSONResponse(
-                    status_code=400, content={"detail": "Invalid Content-Length header"}
+                    status_code=413,
+                    content={
+                        "detail": f"Payload too large. Maximum size is {MAX_FILE_SIZE} bytes."
+                    },
                 )
+        except ValueError:
+            return JSONResponse(
+                status_code=400, content={"detail": "Invalid Content-Length header"}
+            )
     return await call_next(request)
 
 
@@ -117,7 +122,13 @@ async def process_tool(
         result["input_type"] = "file"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
+        raw_filename = file.filename if file.filename else ""
+        filename = os.path.basename(raw_filename.replace("\\", "/"))
+
+        # Check for empty or purely whitespace after sanitization, or invalid '.' / '..'
+        if not filename or filename.isspace() or filename in [".", ".."]:
+            filename = "unnamed"
+
         result["filename"] = filename
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
