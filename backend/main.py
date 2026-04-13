@@ -34,6 +34,11 @@ async def content_length_limit_middleware(request: Request, call_next):
                 return JSONResponse(
                     status_code=400, content={"detail": "Invalid Content-Length header"}
                 )
+        else:
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Content-Length header is required"},
+            )
     return await call_next(request)
 
 
@@ -117,7 +122,13 @@ async def process_tool(
         result["input_type"] = "file"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
+        raw_filename = file.filename or ""
+        filename = os.path.basename(raw_filename.replace("\\", "/")).strip()
+
+        # Verify sanitized filename is safe
+        if not filename or filename in (".", ".."):
+            filename = "unnamed"
+
         result["filename"] = filename
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
