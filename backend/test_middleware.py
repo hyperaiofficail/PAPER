@@ -86,6 +86,30 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
         call_next.assert_not_called()
 
+    async def test_post_request_chunked_case_insensitive(self):
+        request = MagicMock()
+        request.method = "POST"
+        request.headers = {"Transfer-Encoding": "ChuNkeD"}
+        call_next = AsyncMock()
+
+        response = await content_length_limit_middleware(request, call_next)
+        self.assertIsInstance(response, MockJSONResponse)
+        self.assertEqual(response.status_code, 411)
+        self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
+        call_next.assert_not_called()
+
+    async def test_post_request_chunked_multiple_values(self):
+        request = MagicMock()
+        request.method = "POST"
+        request.headers = {"Transfer-Encoding": "gzip, chunked"}
+        call_next = AsyncMock()
+
+        response = await content_length_limit_middleware(request, call_next)
+        self.assertIsInstance(response, MockJSONResponse)
+        self.assertEqual(response.status_code, 411)
+        self.assertIn("Chunked transfer encoding is not allowed", response.body.decode())
+        call_next.assert_not_called()
+
     async def test_post_request_invalid_content_length(self):
         request = MagicMock()
         request.method = "POST"
@@ -96,6 +120,18 @@ class TestContentLengthLimitMiddleware(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(response, MockJSONResponse)
         self.assertEqual(response.status_code, 400)
         self.assertIn("Invalid Content-Length header", response.body.decode())
+        call_next.assert_not_called()
+
+    async def test_post_request_missing_content_length(self):
+        request = MagicMock()
+        request.method = "POST"
+        request.headers = {}
+        call_next = AsyncMock()
+
+        response = await content_length_limit_middleware(request, call_next)
+        self.assertIsInstance(response, MockJSONResponse)
+        self.assertEqual(response.status_code, 411)
+        self.assertIn("Length Required: Content-Length header is missing", response.body.decode())
         call_next.assert_not_called()
 
 if __name__ == '__main__':
