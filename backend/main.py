@@ -121,12 +121,16 @@ async def process_tool(
 
     if file:
         result["input_type"] = "file"
-        # Sanitize filename to prevent path traversal
-        # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
-        result["filename"] = filename
+        # Sanitize filename to prevent path traversal and handle empty/None cases
+        raw_filename = file.filename or ""
+        basename = os.path.basename(raw_filename.replace("\\", "/"))
+        clean_name = basename.strip()
+        if not clean_name or clean_name in [".", ".."]:
+            clean_name = "unnamed"
+
+        result["filename"] = clean_name
         # Simulate processing file
-        result["download_url"] = f"/download/processed_{filename}"
+        result["download_url"] = f"/download/processed_{clean_name}"
     elif text_input:
         if len(text_input) > MAX_TEXT_INPUT_LENGTH:
             raise HTTPException(
