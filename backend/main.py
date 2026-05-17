@@ -121,9 +121,14 @@ async def process_tool(
 
     if file:
         result["input_type"] = "file"
+        # Handle case where file.filename is None or empty
+        raw_filename = file.filename or "unnamed"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
+        filename = os.path.basename(raw_filename.replace("\\", "/")).strip()
+        if not filename or filename in (".", ".."):
+            filename = "unnamed"
+
         result["filename"] = filename
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
