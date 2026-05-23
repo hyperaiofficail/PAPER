@@ -54,8 +54,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
 # Load tools
@@ -123,7 +123,10 @@ async def process_tool(
         result["input_type"] = "file"
         # Sanitize filename to prevent path traversal
         # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
+        raw_name = file.filename or "unnamed"
+        filename = os.path.basename(raw_name.replace("\\", "/")).strip()
+        if not filename or filename in (".", ".."):
+            filename = "unnamed"
         result["filename"] = filename
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
