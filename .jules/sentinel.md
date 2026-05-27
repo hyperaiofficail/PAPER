@@ -7,3 +7,8 @@
 **Vulnerability:** The application enforced a maximum payload size limit by checking the `Content-Length` header, but it did not mandate the header's presence for methods like POST/PUT/PATCH. This meant attackers could bypass the size limit entirely by omitting the `Content-Length` header or using `Transfer-Encoding: chunked` (with non-standard casings or multiple values).
 **Learning:** Relying on the presence of a header (like `Content-Length`) to enforce security limits can lead to bypasses if the header is completely omitted.
 **Prevention:** When enforcing payload size limits, always explicitly validate and mandate the presence of the header (e.g., returning a 411 Length Required response if absent). Also ensure `Transfer-Encoding: chunked` checks are case-insensitive and handle multiple values.
+
+## 2026-02-24 - Unhandled None and Path Traversal in File Uploads
+**Vulnerability:** The application was not gracefully handling edge cases where `file.filename` from a FastAPI `UploadFile` could be `None`, empty, or consist entirely of path traversal sequences like `.` or `..` after sanitization.
+**Learning:** `UploadFile.filename` is typed as `str | None`. Not handling `None` leads to exceptions. Additionally, merely extracting the basename isn't sufficient if the basename resolves to an empty string, `.`, or `..`.
+**Prevention:** Always verify that `file.filename` is not `None`. After path sanitization (via `os.path.basename` and stripping whitespace), explicitly check if the filename is empty, `.`, or `..`, falling back to a safe default (like "unnamed") if any condition is met.
