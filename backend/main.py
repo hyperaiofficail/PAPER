@@ -50,12 +50,14 @@ if allowed_origins_env:
 else:
     allowed_origins = ["http://localhost:3000"]
 
+# Security Check: Restrict CORS to specific methods and headers to enforce the principle of least privilege
+# rather than using overly permissive wildcards ('*').
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
 )
 
 # Load tools
