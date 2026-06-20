@@ -7,3 +7,8 @@
 **Vulnerability:** The application enforced a maximum payload size limit by checking the `Content-Length` header, but it did not mandate the header's presence for methods like POST/PUT/PATCH. This meant attackers could bypass the size limit entirely by omitting the `Content-Length` header or using `Transfer-Encoding: chunked` (with non-standard casings or multiple values).
 **Learning:** Relying on the presence of a header (like `Content-Length`) to enforce security limits can lead to bypasses if the header is completely omitted.
 **Prevention:** When enforcing payload size limits, always explicitly validate and mandate the presence of the header (e.g., returning a 411 Length Required response if absent). Also ensure `Transfer-Encoding: chunked` checks are case-insensitive and handle multiple values.
+
+## 2026-02-24 - DoS and Path Traversal bypass via Unhandled `UploadFile.filename`
+**Vulnerability:** The application used `file.filename.replace()` directly on `FastAPI` `UploadFile` objects. Since clients can omit the filename, `file.filename` can be `None`, leading to an `AttributeError` DoS when string operations are called on it. Furthermore, attackers could submit filenames containing only whitespace or edge cases like '.' which might bypass initial path traversal checks.
+**Learning:** Always coalesce optional attributes like `filename` (e.g., `file.filename or ""`) before performing string operations to prevent unhandled exceptions.
+**Prevention:** Always coalesce `file.filename or ""` to a string, explicitly strip whitespace from the sanitized filename, and enforce a safe fallback (like "unnamed") if the result is empty or dangerous (e.g., '.', '..').
