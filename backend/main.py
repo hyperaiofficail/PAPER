@@ -121,9 +121,15 @@ async def process_tool(
 
     if file:
         result["input_type"] = "file"
-        # Sanitize filename to prevent path traversal
-        # We handle both / and \ as separators
-        filename = os.path.basename(file.filename.replace("\\", "/"))
+        # Sanitize filename to prevent path traversal and DoS via None
+        # FastAPI's UploadFile.filename can be None. Coalesce to "" before string operations
+        raw_filename = file.filename or ""
+        # We handle both / and \ as separators, then get basename, then strip whitespace
+        filename = os.path.basename(raw_filename.replace("\\", "/")).strip()
+
+        if not filename or filename in (".", ".."):
+            filename = "unnamed"
+
         result["filename"] = filename
         # Simulate processing file
         result["download_url"] = f"/download/processed_{filename}"
